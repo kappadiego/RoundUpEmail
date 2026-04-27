@@ -1,0 +1,18 @@
+language: it
+timezone: Europe/Rome
+digest_time: "08:00"
+recipient_email: you@example.com
+max_articles: 50
+model: gpt-5.4-mini
+
+include_keywords:
+  - editoria
+  - AI
+  - accessibilita
+exclude_keywords:
+  - gossip
+
+feeds:
+  - url: https://example.com/feed.xml
+    title: Example Feed
+    weight: 1
