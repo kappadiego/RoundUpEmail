@@ -1,0 +1,16 @@
+[project]
+name = "personal-digestor"
+version = "0.1.0"
+description = "Local RSS and saved-URL digest generator with LLM topic summaries and SMTP delivery."
+requires-python = ">=3.10"
+dependencies = []
+
+[project.optional-dependencies]
+nice = [
+  "PyYAML>=6.0",
+  "Jinja2>=3.1",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
