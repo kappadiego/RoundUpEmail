@@ -7,7 +7,7 @@ from pathlib import Path
 import os
 import smtplib
 
-from .config import DIGESTS_DIR, Profile
+from .config import Profile, get_digests_dir
 
 
 def render_digest_html(profile: Profile, digest_date: str, payload: dict) -> str:
@@ -35,7 +35,7 @@ def render_digest_html(profile: Profile, digest_date: str, payload: dict) -> str
 
 
 def write_digest_html(profile: Profile, digest_date: str, html: str) -> Path:
-    out_dir = DIGESTS_DIR / profile.name
+    out_dir = get_digests_dir() / profile.name
     out_dir.mkdir(parents=True, exist_ok=True)
     path = out_dir / f"{digest_date}.html"
     path.write_text(html, encoding="utf-8")
