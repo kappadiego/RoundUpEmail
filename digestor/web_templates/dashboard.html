@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}{{ workspace.name }} - RoundUpEmail{% endblock %}
+{% block content %}
+  {% if notice %}<div class="notice">{{ notice }}</div>{% endif %}
+  <div class="topbar">
+    <div>
+      <h1>{{ workspace.name }}</h1>
+      <p class="muted">{{ feeds|length }} feed · {{ articles|length }} articoli recenti · digest {{ workspace.digest_time }}</p>
+    </div>
+    <div class="actions">
+      <form class="inline" method="post" action="/w/{{ workspace.slug }}/fetch"><button>Fetch</button></form>
+      <form class="inline" method="post" action="/w/{{ workspace.slug }}/digest"><button class="primary">Genera digest</button></form>
+      <form class="inline" method="post" action="/w/{{ workspace.slug }}/send"><button>Invia email</button></form>
+    </div>
+  </div>
+  <div class="grid">
+    <section class="panel">
+      <h2>Feed</h2>
+      <p class="muted">{{ feeds|length }} fonti configurate.</p>
+      <a href="/w/{{ workspace.slug }}/feeds">Gestisci feed</a>
+    </section>
+    <section class="panel">
+      <h2>Reader</h2>
+      <p class="muted">Ultimi articoli, salvati e letti.</p>
+      <a href="/w/{{ workspace.slug }}/articles">Apri articoli</a>
+    </section>
+    <section class="panel">
+      <h2>Newsletter</h2>
+      <p class="muted">{{ digests|length }} digest recenti.</p>
+      <a href="/w/{{ workspace.slug }}/digests">Archivio digest</a>
+    </section>
+  </div>
+  <section class="panel" style="margin-top:16px">
+    <h2>Ultimi articoli</h2>
+    <div class="stack">
+      {% for article in articles %}
+        <div class="row">
+          <div>
+            <a class="article-title" href="{{ article.url }}" target="_blank" rel="noreferrer">{{ article.title }}</a>
+            <p class="muted">{{ article.source }} · {{ article.published_at|short_date }}</p>
+          </div>
+          <span class="badge">{{ "letto" if article.read_at else "nuovo" }}</span>
+        </div>
+      {% else %}
+        <p class="muted">Nessun articolo ancora. Aggiungi feed e avvia Fetch.</p>
+      {% endfor %}
+    </div>
+  </section>
+{% endblock %}
