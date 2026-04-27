@@ -6,14 +6,11 @@ import json
 import sqlite3
 
 from .articles import Article, canonical_url, fingerprint
-from .config import DATA_DIR
-
-
-DEFAULT_DB = DATA_DIR / "digestor.sqlite"
+from .config import FeedConfig, Profile, get_data_dir
 
 
 def connect(path: Path | str | None = None) -> sqlite3.Connection:
-    db_path = Path(path) if path else DEFAULT_DB
+    db_path = Path(path) if path else get_data_dir() / "digestor.sqlite"
     db_path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
@@ -38,8 +35,37 @@ def ensure_schema(conn: sqlite3.Connection) -> None:
             summary TEXT,
             content TEXT,
             fingerprint TEXT NOT NULL,
+            read_at TEXT,
+            saved_at TEXT,
             sent_at TEXT,
             UNIQUE(profile, canonical_url)
+        );
+
+        CREATE TABLE IF NOT EXISTS workspaces (
+            slug TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            include_keywords TEXT NOT NULL DEFAULT '[]',
+            exclude_keywords TEXT NOT NULL DEFAULT '[]',
+            language TEXT NOT NULL DEFAULT 'it',
+            timezone TEXT NOT NULL DEFAULT 'Europe/Rome',
+            digest_time TEXT NOT NULL DEFAULT '08:00',
+            recipient_email TEXT,
+            max_articles INTEGER NOT NULL DEFAULT 50,
+            model TEXT NOT NULL DEFAULT 'gpt-5.4-mini',
+            created_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS feeds (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            workspace TEXT NOT NULL,
+            url TEXT NOT NULL,
+            title TEXT,
+            weight INTEGER NOT NULL DEFAULT 1,
+            active INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT NOT NULL,
+            last_fetched_at TEXT,
+            UNIQUE(workspace, url),
+            FOREIGN KEY(workspace) REFERENCES workspaces(slug) ON DELETE CASCADE
         );
 
         CREATE TABLE IF NOT EXISTS saved_urls (
@@ -74,7 +100,191 @@ def ensure_schema(conn: sqlite3.Connection) -> None:
         );
         """
     )
+    _add_column(conn, "articles", "read_at", "TEXT")
+    _add_column(conn, "articles", "saved_at", "TEXT")
     conn.commit()
+
+
+def _add_column(conn: sqlite3.Connection, table: str, column: str, definition: str) -> None:
+    existing = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})")}
+    if column not in existing:
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+
+
+def create_workspace(
+    conn: sqlite3.Connection,
+    slug: str,
+    name: str = "",
+    include_keywords: list[str] | None = None,
+    exclude_keywords: list[str] | None = None,
+    language: str = "it",
+    timezone_name: str = "Europe/Rome",
+    digest_time: str = "08:00",
+    recipient_email: str = "",
+    max_articles: int = 50,
+    model: str = "gpt-5.4-mini",
+) -> None:
+    conn.execute(
+        """
+        INSERT INTO workspaces(
+            slug, name, include_keywords, exclude_keywords, language, timezone,
+            digest_time, recipient_email, max_articles, model, created_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(slug) DO UPDATE SET
+            name = excluded.name,
+            include_keywords = excluded.include_keywords,
+            exclude_keywords = excluded.exclude_keywords,
+            language = excluded.language,
+            timezone = excluded.timezone,
+            digest_time = excluded.digest_time,
+            recipient_email = excluded.recipient_email,
+            max_articles = excluded.max_articles,
+            model = excluded.model
+        """,
+        (
+            slug,
+            name or slug,
+            json.dumps(include_keywords or []),
+            json.dumps(exclude_keywords or []),
+            language,
+            timezone_name,
+            digest_time,
+            recipient_email,
+            max_articles,
+            model,
+            utcnow(),
+        ),
+    )
+    conn.commit()
+
+
+def list_workspaces(conn: sqlite3.Connection) -> list[sqlite3.Row]:
+    return list(conn.execute("SELECT * FROM workspaces ORDER BY name COLLATE NOCASE"))
+
+
+def get_workspace(conn: sqlite3.Connection, slug: str) -> sqlite3.Row | None:
+    return conn.execute("SELECT * FROM workspaces WHERE slug = ?", (slug,)).fetchone()
+
+
+def ensure_workspace(conn: sqlite3.Connection, slug: str, name: str = "") -> sqlite3.Row:
+    existing = get_workspace(conn, slug)
+    if not existing:
+        create_workspace(conn, slug, name or slug)
+    row = get_workspace(conn, slug)
+    assert row is not None
+    return row
+
+
+def workspace_profile(conn: sqlite3.Connection, slug: str) -> Profile:
+    row = ensure_workspace(conn, slug)
+    feeds = [FeedConfig(url=feed["url"], title=feed["title"] or "", weight=int(feed["weight"])) for feed in list_feeds(conn, slug)]
+    return Profile(
+        name=row["slug"],
+        feeds=feeds,
+        include_keywords=json.loads(row["include_keywords"] or "[]"),
+        exclude_keywords=json.loads(row["exclude_keywords"] or "[]"),
+        language=row["language"],
+        timezone=row["timezone"],
+        digest_time=row["digest_time"],
+        recipient_email=row["recipient_email"] or "",
+        max_articles=int(row["max_articles"]),
+        model=row["model"],
+    )
+
+
+def add_feed(conn: sqlite3.Connection, workspace: str, url: str, title: str = "", weight: int = 1) -> int:
+    ensure_workspace(conn, workspace)
+    cur = conn.execute(
+        """
+        INSERT INTO feeds(workspace, url, title, weight, created_at)
+        VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT(workspace, url) DO UPDATE SET
+            title = excluded.title,
+            weight = excluded.weight,
+            active = 1
+        RETURNING id
+        """,
+        (workspace, url, title, weight, utcnow()),
+    )
+    row = cur.fetchone()
+    conn.commit()
+    return int(row["id"])
+
+
+def update_feed(conn: sqlite3.Connection, feed_id: int, title: str, weight: int, active: bool) -> None:
+    conn.execute(
+        "UPDATE feeds SET title = ?, weight = ?, active = ? WHERE id = ?",
+        (title, weight, int(active), feed_id),
+    )
+    conn.commit()
+
+
+def delete_feed(conn: sqlite3.Connection, feed_id: int) -> None:
+    conn.execute("DELETE FROM feeds WHERE id = ?", (feed_id,))
+    conn.commit()
+
+
+def list_feeds(conn: sqlite3.Connection, workspace: str, active_only: bool = True) -> list[sqlite3.Row]:
+    if active_only:
+        return list(conn.execute("SELECT * FROM feeds WHERE workspace = ? AND active = 1 ORDER BY title, url", (workspace,)))
+    return list(conn.execute("SELECT * FROM feeds WHERE workspace = ? ORDER BY active DESC, title, url", (workspace,)))
+
+
+def mark_feed_fetched(conn: sqlite3.Connection, feed_id: int) -> None:
+    conn.execute("UPDATE feeds SET last_fetched_at = ? WHERE id = ?", (utcnow(), feed_id))
+    conn.commit()
+
+
+def list_articles(
+    conn: sqlite3.Connection,
+    profile: str,
+    limit: int = 100,
+    saved_only: bool = False,
+    unread_only: bool = False,
+) -> list[sqlite3.Row]:
+    where = ["profile = ?"]
+    params: list[object] = [profile]
+    if saved_only:
+        where.append("saved_at IS NOT NULL")
+    if unread_only:
+        where.append("read_at IS NULL")
+    query = f"""
+        SELECT * FROM articles
+        WHERE {' AND '.join(where)}
+        ORDER BY COALESCE(published_at, fetched_at) DESC
+        LIMIT ?
+    """
+    params.append(limit)
+    return list(conn.execute(query, params))
+
+
+def get_article(conn: sqlite3.Connection, article_id: int) -> sqlite3.Row | None:
+    return conn.execute("SELECT * FROM articles WHERE id = ?", (article_id,)).fetchone()
+
+
+def set_article_read(conn: sqlite3.Connection, article_id: int, read: bool) -> None:
+    conn.execute("UPDATE articles SET read_at = ? WHERE id = ?", (utcnow() if read else None, article_id))
+    conn.commit()
+
+
+def set_article_saved(conn: sqlite3.Connection, article_id: int, saved: bool) -> None:
+    conn.execute("UPDATE articles SET saved_at = ? WHERE id = ?", (utcnow() if saved else None, article_id))
+    conn.commit()
+
+
+def list_digests(conn: sqlite3.Connection, profile: str, limit: int = 30) -> list[sqlite3.Row]:
+    return list(
+        conn.execute(
+            """
+            SELECT * FROM digests
+            WHERE profile = ?
+            ORDER BY digest_date DESC, created_at DESC
+            LIMIT ?
+            """,
+            (profile, limit),
+        )
+    )
 
 
 def add_saved_url(conn: sqlite3.Connection, profile: str, url: str, title: str = "", note: str = "") -> int:
