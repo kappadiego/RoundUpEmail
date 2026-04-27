@@ -34,6 +34,7 @@ from .db import (
     update_feed,
     workspace_profile,
 )
+from .emailer import smtp_configured
 from .scheduler import DigestScheduler, scheduler_enabled
 from .services import fetch_workspace, generate_digest, send_digest_for_date
 
@@ -147,6 +148,7 @@ def workspace_dashboard(request: Request, workspace: str, _: bool = Depends(requ
             "articles": articles,
             "feeds": feeds,
             "digests": digests,
+            "setup_status": setup_status(),
             "notice": request.query_params.get("notice", ""),
         },
     )
@@ -240,8 +242,12 @@ def digest_route(workspace: str, _: bool = Depends(require_user)):
 
 @app.post("/w/{workspace}/send")
 def send_route(workspace: str, _: bool = Depends(require_user)):
-    digest_id = send_digest_for_date(connect(), workspace, date.today())
-    return RedirectResponse(f"/w/{workspace}/digests?notice=Digest+inviato+%23{digest_id}", status_code=303)
+    try:
+        digest_id = send_digest_for_date(connect(), workspace, date.today())
+        notice = f"Digest inviato #{digest_id}"
+    except RuntimeError as exc:
+        notice = str(exc)
+    return RedirectResponse(f"/w/{workspace}/digests?notice={quote_plus(notice)}", status_code=303)
 
 
 @app.get("/w/{workspace}/digests", response_class=HTMLResponse)
@@ -288,3 +294,12 @@ def slugify(value: str) -> str:
 
 def csv(value: str) -> list[str]:
     return [item.strip() for item in value.split(",") if item.strip()]
+
+
+def setup_status() -> dict[str, bool]:
+    return {
+        "openai": bool(os.environ.get("OPENAI_API_KEY")),
+        "smtp": smtp_configured(),
+        "scheduler": scheduler_enabled(),
+        "app_password": bool(os.environ.get("APP_PASSWORD")),
+    }
