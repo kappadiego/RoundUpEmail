@@ -15,6 +15,12 @@
   </div>
   <div class="grid">
     <section class="panel">
+      <h2>Setup</h2>
+      <p class="muted">OpenAI: {{ "ok" if setup_status.openai else "fallback locale" }}</p>
+      <p class="muted">SMTP: {{ "ok" if setup_status.smtp else "non configurato" }}</p>
+      <p class="muted">Scheduler: {{ "attivo" if setup_status.scheduler else "spento" }}</p>
+    </section>
+    <section class="panel">
       <h2>Feed</h2>
       <p class="muted">{{ feeds|length }} fonti configurate.</p>
       <a href="/w/{{ workspace.slug }}/feeds">Gestisci feed</a>
