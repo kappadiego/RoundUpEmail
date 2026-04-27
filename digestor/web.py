@@ -79,6 +79,18 @@ async def unauthorized(_: Request, __: HTTPException) -> RedirectResponse:
     return RedirectResponse("/login", status_code=303)
 
 
+@app.get("/healthz")
+def healthz() -> dict[str, object]:
+    return {
+        "ok": True,
+        "app": app.title,
+        "storage": str(get_data_dir()),
+        "smtp": smtp_configured(),
+        "openai": bool(os.environ.get("OPENAI_API_KEY")),
+        "scheduler": scheduler_enabled(),
+    }
+
+
 @app.get("/login", response_class=HTMLResponse)
 def login_page(request: Request, error: str = ""):
     return templates.TemplateResponse("login.html", {"request": request, "error": error})
