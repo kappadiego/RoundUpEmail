@@ -7,6 +7,7 @@ import os
 import sqlite3
 
 from .db import connect, latest_digest, list_workspaces
+from .emailer import smtp_configured
 from .services import fetch_workspace, generate_digest, send_digest_for_date
 
 
@@ -48,7 +49,10 @@ class DigestScheduler:
                 result["fetched"] = fetch_workspace(conn, slug)
                 if self._digest_due(conn, workspace, now):
                     result["digest"] = generate_digest(conn, slug)
-                    result["sent"] = send_digest_for_date(conn, slug)
+                    if smtp_configured():
+                        result["sent"] = send_digest_for_date(conn, slug)
+                    else:
+                        result["sent"] = "skipped: smtp not configured"
             except Exception as exc:  # noqa: BLE001 - scheduler must keep the app alive
                 result["error"] = str(exc)
             results.append(result)
@@ -68,4 +72,4 @@ class DigestScheduler:
 
 
 def scheduler_enabled() -> bool:
-    return os.environ.get("SCHEDULER_ENABLED", "true").lower() in {"1", "true", "yes", "on"}
+    return os.environ.get("SCHEDULER_ENABLED", "false").lower() in {"1", "true", "yes", "on"}
