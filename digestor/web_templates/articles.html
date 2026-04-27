@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}Articoli - {{ workspace.name }}{% endblock %}
+{% block content %}
+  <div class="topbar">
+    <div>
+      <h1>Articoli</h1>
+      <p class="muted">{{ workspace.name }}</p>
+    </div>
+    <div class="actions">
+      <a class="button" href="/w/{{ workspace.slug }}/articles">Tutti</a>
+      <a class="button" href="/w/{{ workspace.slug }}/articles?filter=unread">Non letti</a>
+      <a class="button" href="/w/{{ workspace.slug }}/articles?filter=saved">Salvati</a>
+    </div>
+  </div>
+  <section class="panel">
+    <h2>Salva URL singolo</h2>
+    <form class="form-grid" method="post" action="/w/{{ workspace.slug }}/saved-urls">
+      <label>URL<input name="url" type="url" required></label>
+      <label>Titolo<input name="title"></label>
+      <button class="primary">Aggiungi alla inbox</button>
+    </form>
+  </section>
+  <section class="stack" style="margin-top:16px">
+    {% for article in articles %}
+      <article class="item">
+        <div class="row">
+          <div>
+            <a class="article-title" href="{{ article.url }}" target="_blank" rel="noreferrer">{{ article.title }}</a>
+            <p class="muted">{{ article.source }} · {{ article.published_at|short_date }}</p>
+          </div>
+          <div class="actions">
+            <form method="post" action="/w/{{ workspace.slug }}/articles/{{ article.id }}/read">
+              <input type="hidden" name="read" value="{{ 0 if article.read_at else 1 }}">
+              <button>{{ "Segna nuovo" if article.read_at else "Letto" }}</button>
+            </form>
+            <form method="post" action="/w/{{ workspace.slug }}/articles/{{ article.id }}/saved">
+              <input type="hidden" name="saved" value="{{ 0 if article.saved_at else 1 }}">
+              <button>{{ "Rimuovi salvato" if article.saved_at else "Salva" }}</button>
+            </form>
+          </div>
+        </div>
+        <p>{{ article.summary or article.content }}</p>
+      </article>
+    {% else %}
+      <div class="item muted">Nessun articolo in questa vista.</div>
+    {% endfor %}
+  </section>
+{% endblock %}
