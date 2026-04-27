@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 import os
+import tempfile
 import textwrap
 
 
@@ -11,6 +12,7 @@ ROOT = Path.cwd()
 PROFILES_DIR = ROOT / "profiles"
 DATA_DIR = Path(os.environ.get("DATA_DIR", ROOT / "data"))
 DIGESTS_DIR = DATA_DIR / "digests"
+_DATA_DIR_WARNING = ""
 
 
 @dataclass
@@ -57,12 +59,46 @@ def refresh_paths() -> None:
 
 def get_data_dir() -> Path:
     refresh_paths()
-    return DATA_DIR
+    return _writable_dir_or_fallback(DATA_DIR)
 
 
 def get_digests_dir() -> Path:
     refresh_paths()
-    return DIGESTS_DIR
+    if os.environ.get("DIGESTS_DIR"):
+        return _writable_dir_or_fallback(DIGESTS_DIR)
+    return get_data_dir() / "digests"
+
+
+def data_dir_warning() -> str:
+    get_data_dir()
+    return _DATA_DIR_WARNING
+
+
+def _writable_dir_or_fallback(path: Path) -> Path:
+    global _DATA_DIR_WARNING
+    try:
+        _ensure_writable_dir(path)
+        _DATA_DIR_WARNING = ""
+        return path
+    except OSError as exc:
+        fallback = Path(tempfile.gettempdir()) / "roundupemail-data"
+        try:
+            _ensure_writable_dir(fallback)
+        except OSError:
+            raise exc
+        _DATA_DIR_WARNING = (
+            f"DATA_DIR '{path}' non e scrivibile: {exc.strerror or exc}. "
+            f"Sto usando '{fallback}' come storage temporaneo. "
+            "Per conservare i dati su Railway, monta un volume persistente e imposta DATA_DIR sul mount path."
+        )
+        return fallback
+
+
+def _ensure_writable_dir(path: Path) -> None:
+    path.mkdir(parents=True, exist_ok=True)
+    probe = path / ".write-test"
+    probe.write_text("ok", encoding="utf-8")
+    probe.unlink(missing_ok=True)
 
 
 def profile_path(name: str) -> Path:
