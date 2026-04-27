@@ -19,6 +19,8 @@
       <p class="muted">OpenAI: {{ "ok" if setup_status.openai else "fallback locale" }}</p>
       <p class="muted">SMTP: {{ "ok" if setup_status.smtp else "non configurato" }}</p>
       <p class="muted">Scheduler: {{ "attivo" if setup_status.scheduler else "spento" }}</p>
+      <p class="muted">Storage: {{ setup_status.data_dir }}</p>
+      {% if setup_status.data_dir_warning %}<p class="warning">{{ setup_status.data_dir_warning }}</p>{% endif %}
     </section>
     <section class="panel">
       <h2>Feed</h2>
