@@ -16,7 +16,7 @@ from .db import (
     upsert_article,
     workspace_profile,
 )
-from .emailer import digest_subject, render_digest_html, send_digest, write_digest_html
+from .emailer import digest_subject, render_digest_html, send_digest, smtp_configured, write_digest_html
 from .feeds import fetch_feed, fetch_saved_article
 from .llm import build_digest
 
@@ -80,6 +80,8 @@ def generate_digest(
 
 
 def send_digest_for_date(conn: sqlite3.Connection, workspace: str, digest_date: date | None = None, to_email: str | None = None) -> int:
+    if not smtp_configured() and not to_email:
+        raise RuntimeError("SMTP is not configured yet. Add SMTP settings before sending email.")
     profile = workspace_profile(conn, workspace)
     row = latest_digest(conn, workspace, digest_date or date.today())
     if not row:
