@@ -10,6 +10,14 @@ import smtplib
 from .config import Profile, get_digests_dir
 
 
+def smtp_configured() -> bool:
+    return bool(
+        os.environ.get("SMTP_HOST")
+        and (os.environ.get("SMTP_FROM") or os.environ.get("SMTP_USER"))
+        and os.environ.get("SMTP_TO")
+    )
+
+
 def render_digest_html(profile: Profile, digest_date: str, payload: dict) -> str:
     subject = digest_subject(profile, digest_date, payload)
     body = _render_topics(payload.get("topics", []))
