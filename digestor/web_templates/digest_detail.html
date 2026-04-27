@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}{{ digest.subject }}{% endblock %}
+{% block content %}
+  <div class="topbar">
+    <div>
+      <h1>{{ digest.subject }}</h1>
+      <p class="muted">{{ digest.digest_date }}</p>
+    </div>
+    <a class="button" href="/w/{{ workspace }}/digests">Torna ai digest</a>
+  </div>
+  <div class="digest-frame">
+    {% if html %}
+      <iframe srcdoc="{{ html|e }}"></iframe>
+    {% else %}
+      <div class="panel">File HTML non trovato sul volume persistente.</div>
+    {% endif %}
+  </div>
+{% endblock %}
