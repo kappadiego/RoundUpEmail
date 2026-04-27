@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Digest - {{ workspace.name }}{% endblock %}
+{% block content %}
+  {% if notice %}<div class="notice">{{ notice }}</div>{% endif %}
+  <div class="topbar">
+    <div>
+      <h1>Digest</h1>
+      <p class="muted">{{ workspace.name }}</p>
+    </div>
+    <div class="actions">
+      <form method="post" action="/w/{{ workspace.slug }}/digest"><button class="primary">Genera oggi</button></form>
+      <form method="post" action="/w/{{ workspace.slug }}/send"><button>Invia oggi</button></form>
+    </div>
+  </div>
+  <section class="stack">
+    {% for digest in digests %}
+      <div class="item row">
+        <div>
+          <h2>{{ digest.subject }}</h2>
+          <p class="muted">{{ digest.digest_date }} · creato {{ digest.created_at }} · {{ "inviato" if digest.sent_at else "non inviato" }}</p>
+        </div>
+        <a class="button" href="/w/{{ workspace.slug }}/digests/{{ digest.id }}">Apri</a>
+      </div>
+    {% else %}
+      <div class="item muted">Nessun digest generato.</div>
+    {% endfor %}
+  </section>
+{% endblock %}
