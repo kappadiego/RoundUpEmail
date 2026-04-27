@@ -17,7 +17,7 @@ try:
 except ModuleNotFoundError as exc:  # pragma: no cover - exercised only without web deps installed
     raise RuntimeError("Install web dependencies with `pip install -e .` before running the web app") from exc
 
-from .config import load_env
+from .config import data_dir_warning, get_data_dir, load_env
 from .db import (
     add_feed,
     add_saved_url,
@@ -296,10 +296,12 @@ def csv(value: str) -> list[str]:
     return [item.strip() for item in value.split(",") if item.strip()]
 
 
-def setup_status() -> dict[str, bool]:
+def setup_status() -> dict[str, object]:
     return {
         "openai": bool(os.environ.get("OPENAI_API_KEY")),
         "smtp": smtp_configured(),
         "scheduler": scheduler_enabled(),
         "app_password": bool(os.environ.get("APP_PASSWORD")),
+        "data_dir": str(get_data_dir()),
+        "data_dir_warning": data_dir_warning(),
     }
