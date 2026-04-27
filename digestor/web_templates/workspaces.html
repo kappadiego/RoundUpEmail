@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Workspace - RoundUpEmail{% endblock %}
+{% block content %}
+  <div class="topbar">
+    <div>
+      <h1>Workspace</h1>
+      <p class="muted">Clienti, industry o dossier editoriali separati.</p>
+    </div>
+  </div>
+  <div class="grid">
+    {% for item in workspaces %}
+      <a class="item" href="/w/{{ item.slug }}">
+        <h2>{{ item.name }}</h2>
+        <p class="muted">{{ item.slug }} · digest {{ item.digest_time }}</p>
+      </a>
+    {% endfor %}
+  </div>
+  <section class="panel" style="margin-top:16px">
+    <h2>Nuovo workspace</h2>
+    <form class="form-grid" method="post" action="/workspaces">
+      <label>Nome<input name="name" placeholder="Editoria AI" required></label>
+      <label>Keyword<input name="include_keywords" placeholder="AI, editoria, policy"></label>
+      <label>Ora digest<input name="digest_time" value="08:00"></label>
+      <label>Email destinatario<input name="recipient_email" type="email" placeholder="me@example.com"></label>
+      <button class="primary">Crea</button>
+    </form>
+  </section>
+{% endblock %}
