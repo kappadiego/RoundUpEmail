@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 from datetime import date
+from html import escape
 from pathlib import Path
 import hashlib
 import hmac
@@ -92,8 +93,8 @@ def healthz() -> dict[str, object]:
 
 
 @app.get("/login", response_class=HTMLResponse)
-def login_page(request: Request, error: str = ""):
-    return templates.TemplateResponse("login.html", {"request": request, "error": error})
+def login_page(error: str = ""):
+    return HTMLResponse(_login_html(error))
 
 
 @app.post("/login")
@@ -317,3 +318,38 @@ def setup_status() -> dict[str, object]:
         "data_dir": str(get_data_dir()),
         "data_dir_warning": data_dir_warning(),
     }
+
+
+def _login_html(error: str = "") -> str:
+    error_html = f'<div class="error">{escape(error)}</div>' if error else ""
+    return f"""<!doctype html>
+<html lang="it">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Login - RoundUpEmail</title>
+    <style>
+      * {{ box-sizing: border-box; }}
+      body {{ margin: 0; min-height: 100vh; display: grid; place-items: center; background: #f5f7f9; color: #15202b; font-family: Arial, Helvetica, sans-serif; }}
+      .login {{ width: min(420px, calc(100vw - 32px)); background: #fff; border: 1px solid #dbe3ea; border-radius: 8px; padding: 24px; }}
+      h1 {{ margin: 0 0 8px; font-size: 26px; letter-spacing: 0; }}
+      p {{ color: #5d6b7a; }}
+      label {{ display: grid; gap: 6px; margin: 18px 0; color: #5d6b7a; font-size: 13px; }}
+      input {{ width: 100%; min-height: 40px; border: 1px solid #dbe3ea; border-radius: 6px; padding: 8px 10px; font: inherit; }}
+      button {{ width: 100%; min-height: 40px; border: 0; border-radius: 6px; background: #176f62; color: #fff; font: inherit; cursor: pointer; }}
+      .error {{ background: #fff4e5; color: #7a4f00; padding: 10px; border-radius: 6px; }}
+    </style>
+  </head>
+  <body>
+    <form class="login" method="post" action="/login">
+      <h1>RoundUpEmail</h1>
+      <p>Accedi al tuo raccoglitore di notizie.</p>
+      {error_html}
+      <label>Password
+        <input type="password" name="password" autofocus required>
+      </label>
+      <button>Entra</button>
+    </form>
+  </body>
+</html>
+"""
