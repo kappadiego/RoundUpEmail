@@ -7,12 +7,12 @@ Un piccolo Feedly personale: legge RSS e URL salvati, deduplica gli articoli, li
 ```bash
 cp .env.example .env
 pip install -e .
-uvicorn digestor.web:app --reload
+python -m digestor.run_web
 ```
 
 Apri `http://127.0.0.1:8000` e accedi con `APP_PASSWORD`.
 
-Compila `.env` con `OPENAI_API_KEY`, `APP_PASSWORD` e credenziali SMTP. Se `OPENAI_API_KEY` non e' presente, il digest usa un fallback locale estrattivo utile per testare il flusso.
+Compila `.env` con `APP_PASSWORD`. `OPENAI_API_KEY` e SMTP possono restare vuoti durante il primo test: il digest usa un fallback locale e l'invio email resta disabilitato finche SMTP non e' configurato.
 
 ## Web app
 
@@ -28,17 +28,21 @@ Compila `.env` con `OPENAI_API_KEY`, `APP_PASSWORD` e credenziali SMTP. Se `OPEN
 Collega questa repo a Railway e usa il servizio web generato. La repo include `Procfile` e `railway.json` con start command:
 
 ```bash
-uvicorn digestor.web:app --host 0.0.0.0 --port ${PORT:-8000}
+python -m digestor.run_web
 ```
 
-Configura queste variabili:
+Per un primo test configura solo:
+
+```bash
+APP_PASSWORD=una-password-tua
+DATA_DIR=/data
+SCHEDULER_ENABLED=false
+```
+
+Poi, quando vuoi attivare summary LLM e invio email, aggiungi:
 
 ```bash
 OPENAI_API_KEY=...
-APP_PASSWORD=...
-DATA_DIR=/data
-SCHEDULER_ENABLED=true
-FETCH_INTERVAL_MINUTES=60
 SMTP_HOST=smtp.gmail.com
 SMTP_PORT=587
 SMTP_USER=...
@@ -53,12 +57,12 @@ Per Gmail SMTP usa una app password, non la password principale dell'account.
 
 ## Flusso giornaliero
 
-La web app avvia uno scheduler interno quando `SCHEDULER_ENABLED=true`:
+La web app avvia uno scheduler interno quando `SCHEDULER_ENABLED=true`. Per i primi test lascia `SCHEDULER_ENABLED=false`, poi abilitalo quando SMTP e volume persistente sono pronti:
 
 - scarica i feed a intervallo regolare;
 - genera il digest dopo l'orario configurato nel workspace;
 - invia la newsletter se Gmail SMTP e' configurato;
-- riprova se il digest e' stato generato ma non inviato.
+- se SMTP non e' configurato, genera il digest ma salta l'invio.
 
 I comandi CLI restano utili per debug/manual run:
 
@@ -74,7 +78,7 @@ Oppure in un solo passaggio:
 python -m digestor run-daily --profile my-client
 ```
 
-I digest HTML vengono sempre salvati in `digests/<profile>/<date>.html`. Il database SQLite vive in `data/digestor.sqlite`.
+I digest HTML vengono salvati sotto `DATA_DIR/digests/<profile>/<date>.html`. Il database SQLite vive in `DATA_DIR/digestor.sqlite`.
 
 ## Workspace cliente/industry
 
