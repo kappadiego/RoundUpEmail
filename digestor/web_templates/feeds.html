@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Feed - {{ workspace.name }}{% endblock %}
+{% block content %}
+  <div class="topbar">
+    <div>
+      <h1>Feed</h1>
+      <p class="muted">{{ workspace.name }}</p>
+    </div>
+    <form method="post" action="/w/{{ workspace.slug }}/fetch"><button class="primary">Fetch ora</button></form>
+  </div>
+  <section class="panel">
+    <h2>Aggiungi RSS</h2>
+    <form class="form-grid" method="post" action="/w/{{ workspace.slug }}/feeds">
+      <label>URL feed<input name="url" type="url" placeholder="https://example.com/feed.xml" required></label>
+      <label>Titolo<input name="title" placeholder="Nome fonte"></label>
+      <label>Peso<input name="weight" type="number" value="1" min="1"></label>
+      <button class="primary">Aggiungi</button>
+    </form>
+  </section>
+  <section class="stack" style="margin-top:16px">
+    {% for feed in feeds %}
+      <div class="item">
+        <form class="form-grid" method="post" action="/w/{{ workspace.slug }}/feeds/{{ feed.id }}/update">
+          <label>Titolo<input name="title" value="{{ feed.title or '' }}"></label>
+          <label>URL<input value="{{ feed.url }}" disabled></label>
+          <label>Peso<input name="weight" type="number" value="{{ feed.weight }}" min="1"></label>
+          <label>Attivo
+            <select name="active">
+              <option value="1" {% if feed.active %}selected{% endif %}>Si</option>
+              <option value="0" {% if not feed.active %}selected{% endif %}>No</option>
+            </select>
+          </label>
+          <button>Salva</button>
+        </form>
+        <div class="row" style="margin-top:10px">
+          <span class="muted">Ultimo fetch: {{ feed.last_fetched_at or "mai" }}</span>
+          <form method="post" action="/w/{{ workspace.slug }}/feeds/{{ feed.id }}/delete"><button>Elimina</button></form>
+        </div>
+      </div>
+    {% else %}
+      <div class="item muted">Nessun feed configurato.</div>
+    {% endfor %}
+  </section>
+{% endblock %}
