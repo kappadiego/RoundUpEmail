@@ -9,6 +9,8 @@ import hmac
 import json
 import os
 import re
+import sys
+import traceback
 from urllib.parse import quote_plus
 
 try:
@@ -42,12 +44,21 @@ from .services import fetch_workspace, generate_digest, send_digest_for_date
 
 load_env()
 
-app = FastAPI(title="RoundUpEmail")
+app = FastAPI(title="RoundUpEmail", debug=os.environ.get("APP_DEBUG", "1") != "0")
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "web_templates"))
 templates.env.filters["from_json"] = lambda value: json.loads(value or "{}")
 templates.env.filters["short_date"] = lambda value: (value or "")[:10]
 
 _scheduler = DigestScheduler()
+
+
+@app.middleware("http")
+async def diagnostic_errors(request: Request, call_next):
+    try:
+        return await call_next(request)
+    except Exception as exc:  # pragma: no cover - production diagnostic fallback
+        traceback.print_exc()
+        return HTMLResponse(_error_html(request, exc), status_code=500)
 
 
 @asynccontextmanager
@@ -89,6 +100,24 @@ def healthz() -> dict[str, object]:
         "smtp": smtp_configured(),
         "openai": bool(os.environ.get("OPENAI_API_KEY")),
         "scheduler": scheduler_enabled(),
+    }
+
+
+@app.get("/debug")
+def debug_status() -> dict[str, object]:
+    return {
+        "ok": True,
+        "app": app.title,
+        "python": sys.version,
+        "cwd": str(Path.cwd()),
+        "module_file": __file__,
+        "data_dir": str(get_data_dir()),
+        "data_dir_warning": data_dir_warning(),
+        "app_password_configured": bool(os.environ.get("APP_PASSWORD")),
+        "openai_configured": bool(os.environ.get("OPENAI_API_KEY")),
+        "smtp_configured": smtp_configured(),
+        "scheduler_enabled": scheduler_enabled(),
+        "routes": sorted(route.path for route in app.routes if hasattr(route, "path")),
     }
 
 
@@ -350,6 +379,36 @@ def _login_html(error: str = "") -> str:
       </label>
       <button>Entra</button>
     </form>
+  </body>
+</html>
+"""
+
+
+def _error_html(request: Request, exc: Exception) -> str:
+    trace = "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))
+    return f"""<!doctype html>
+<html lang="it">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Errore - RoundUpEmail</title>
+    <style>
+      body {{ margin: 0; background: #f5f7f9; color: #15202b; font-family: Arial, Helvetica, sans-serif; padding: 24px; }}
+      .box {{ max-width: 980px; background: #fff; border: 1px solid #dbe3ea; border-radius: 8px; padding: 20px; }}
+      h1 {{ margin-top: 0; font-size: 24px; letter-spacing: 0; }}
+      p {{ color: #5d6b7a; }}
+      pre {{ white-space: pre-wrap; overflow-x: auto; background: #111827; color: #f9fafb; padding: 14px; border-radius: 6px; font-size: 13px; line-height: 1.45; }}
+      code {{ background: #edf2f7; padding: 2px 4px; border-radius: 4px; }}
+    </style>
+  </head>
+  <body>
+    <main class="box">
+      <h1>RoundUpEmail ha generato un errore</h1>
+      <p>Questa pagina diagnostica serve solo a capire il problema su Railway. Puoi aprire anche <code>/debug</code> e <code>/healthz</code>.</p>
+      <p><strong>Path:</strong> {escape(str(request.url.path))}</p>
+      <p><strong>Errore:</strong> {escape(type(exc).__name__)}: {escape(str(exc))}</p>
+      <pre>{escape(trace)}</pre>
+    </main>
   </body>
 </html>
 """
