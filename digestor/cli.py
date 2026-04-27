@@ -6,11 +6,14 @@ import argparse
 import time
 
 from .articles import rank_articles
-from .config import FeedConfig, load_env, load_or_create_profile, load_profile, save_profile
+from .config import load_env, load_profile
 from .db import (
     add_saved_url,
+    add_feed as add_db_feed,
     candidate_articles,
     connect,
+    create_workspace,
+    get_workspace,
     latest_digest,
     mark_digest_sent,
     mark_saved_url_consumed,
@@ -21,6 +24,7 @@ from .db import (
 from .emailer import digest_subject, render_digest_html, send_digest, write_digest_html
 from .feeds import fetch_feed, fetch_saved_article
 from .llm import build_digest
+from .services import fetch_workspace, generate_digest, send_digest_for_date
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -79,11 +83,10 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def cmd_add_feed(args: argparse.Namespace) -> int:
-    profile = load_or_create_profile(args.profile)
-    if not any(feed.url == args.url for feed in profile.feeds):
-        profile.feeds.append(FeedConfig(url=args.url, title=args.title, weight=args.weight))
-    path = save_profile(profile)
-    print(f"Saved feed in {path}")
+    conn = connect(_db_path(args))
+    create_workspace(conn, args.profile, args.profile)
+    feed_id = add_db_feed(conn, args.profile, args.url, args.title, args.weight)
+    print(f"Saved feed #{feed_id} in workspace {args.profile}")
     return 0
 
 
@@ -95,8 +98,12 @@ def cmd_add_url(args: argparse.Namespace) -> int:
 
 
 def cmd_fetch(args: argparse.Namespace) -> int:
-    profile = load_profile(args.profile)
     conn = connect(_db_path(args))
+    if get_workspace(conn, args.profile):
+        result = fetch_workspace(conn, args.profile)
+        print(f"Fetched {result['fetched']} article candidates, {result['created']} new, {result['failed']} failed")
+        return 0
+    profile = load_profile(args.profile)
     fetched = 0
     created = 0
 
@@ -126,9 +133,13 @@ def cmd_fetch(args: argparse.Namespace) -> int:
 
 
 def cmd_digest(args: argparse.Namespace) -> int:
-    profile = load_profile(args.profile)
     conn = connect(_db_path(args))
     digest_date = _parse_date_arg(args.date)
+    if get_workspace(conn, args.profile):
+        result = generate_digest(conn, args.profile, digest_date, require_llm=args.require_llm)
+        print(f"Stored digest #{result['id']}: {result['html_path']}")
+        return 0
+    profile = load_profile(args.profile)
     candidates = candidate_articles(conn, profile.name, digest_date, profile.max_articles)
     articles = rank_articles(profile, candidates, profile.max_articles)
     payload = build_digest(profile, articles, require_llm=args.require_llm)
@@ -147,9 +158,13 @@ def cmd_digest(args: argparse.Namespace) -> int:
 
 
 def cmd_send(args: argparse.Namespace) -> int:
-    profile = load_profile(args.profile)
     conn = connect(_db_path(args))
     digest_date = _parse_date_arg(args.date)
+    if get_workspace(conn, args.profile):
+        digest_id = send_digest_for_date(conn, args.profile, digest_date, args.to)
+        print(f"Sent digest #{digest_id}")
+        return 0
+    profile = load_profile(args.profile)
     row = latest_digest(conn, profile.name, digest_date)
     if not row:
         raise SystemExit(f"No digest found for {profile.name} on {digest_date}")
