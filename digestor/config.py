@@ -9,8 +9,8 @@ import textwrap
 
 ROOT = Path.cwd()
 PROFILES_DIR = ROOT / "profiles"
-DATA_DIR = ROOT / "data"
-DIGESTS_DIR = ROOT / "digests"
+DATA_DIR = Path(os.environ.get("DATA_DIR", ROOT / "data"))
+DIGESTS_DIR = DATA_DIR / "digests"
 
 
 @dataclass
@@ -46,6 +46,23 @@ def load_env(path: Path | None = None) -> None:
         key = key.strip()
         value = value.strip().strip('"').strip("'")
         os.environ.setdefault(key, value)
+    refresh_paths()
+
+
+def refresh_paths() -> None:
+    global DATA_DIR, DIGESTS_DIR
+    DATA_DIR = Path(os.environ.get("DATA_DIR", ROOT / "data"))
+    DIGESTS_DIR = Path(os.environ.get("DIGESTS_DIR", DATA_DIR / "digests"))
+
+
+def get_data_dir() -> Path:
+    refresh_paths()
+    return DATA_DIR
+
+
+def get_digests_dir() -> Path:
+    refresh_paths()
+    return DIGESTS_DIR
 
 
 def profile_path(name: str) -> Path:
